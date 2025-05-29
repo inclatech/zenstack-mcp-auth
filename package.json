@@ -7,14 +7,16 @@
   },
   "dependencies": {
     "@prisma/client": "6.8.2",
+    "@zenstackhq/runtime": "2.15.0",
     "express": "5.1.0"
   },
   "devDependencies": {
     "@types/express": "5.0.2",
     "@types/node": "22.15.23",
-    "prisma": "6.8.2",
+    "prisma": "6.8.x",
     "ts-node": "10.9.2",
-    "typescript": "5.8.2"
+    "typescript": "5.8.2",
+    "zenstack": "2.15.0"
   },
   "prisma": {
     "seed": "ts-node prisma/seed.ts"
