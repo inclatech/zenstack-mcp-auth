@@ -1,0 +1,22 @@
+{
+  "name": "express",
+  "version": "1.0.0",
+  "license": "MIT",
+  "scripts": {
+    "dev": "ts-node src/index.ts"
+  },
+  "dependencies": {
+    "@prisma/client": "6.8.2",
+    "express": "5.1.0"
+  },
+  "devDependencies": {
+    "@types/express": "5.0.2",
+    "@types/node": "22.15.23",
+    "prisma": "6.8.2",
+    "ts-node": "10.9.2",
+    "typescript": "5.8.2"
+  },
+  "prisma": {
+    "seed": "ts-node prisma/seed.ts"
+  }
+}
