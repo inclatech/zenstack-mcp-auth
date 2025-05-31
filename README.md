@@ -1,6 +1,149 @@
-# REST API Example
+# ZenStack MCP SSE Server
 
-This example shows how to implement a **REST API with TypeScript** using [Express](https://expressjs.com/) and [Prisma Client](https://www.prisma.io/docs/concepts/components/prisma-client). The example uses an SQLite database file with some initial dummy data which you can find at [`./prisma/dev.db`](./prisma/dev.db).
+A Model Context Protocol (MCP) Server-Sent Events server built with ZenStack, Prisma, and Express that supports multiple simultaneous connections.
+
+## Features
+
+-   **MCP SSE Protocol**: Full MCP server implementation with Server-Sent Events transport
+-   **Multiple Connections**: Supports multiple simultaneous client connections
+-   **ZenStack Integration**: Authorization and access control using ZenStack policies
+-   **Real-time Communication**: Bi-directional communication via SSE
+-   **Tool-based API**: Exposes database operations as MCP tools
+
+## Available Tools
+
+-   `get_posts` - Get all posts visible to the current user
+-   `create_post` - Create a new post (requires authentication)
+-   `update_post` - Update an existing post (requires ownership)
+-   `delete_post` - Delete a post (requires ownership)
+-   `get_users` - Get all users with their published posts
+
+## Quick Start
+
+1. **Install dependencies**:
+
+    ```bash
+    npm install
+    ```
+
+2. **Set up the database**:
+
+    ```bash
+    npx prisma generate
+    npx prisma db push
+    npx prisma db seed
+    ```
+
+3. **Start the server**:
+
+    ```bash
+    npm run dev
+    ```
+
+## Configuration
+
+The server can be configured using environment variables. Copy `.env.example` to `.env` and modify as needed:
+
+```bash
+cp .env.example .env
+```
+
+Available environment variables:
+
+-   `BASE_URL`: Base URL for the server (default: `http://localhost:3001`)
+-   `PORT`: Port for the server to listen on (default: `3001`)
+
+Example:
+
+```bash
+# .env
+BASE_URL=https://my-mcp-server.com
+PORT=8080
+```
+
+4. **Server endpoints**:
+    - MCP SSE: `http://localhost:3001/sse`
+    - Health Check: `http://localhost:3001/health`
+    - Legacy REST: `http://localhost:3001/post`
+
+## Authentication
+
+Send user ID in the `X-USER-ID` header:
+
+```bash
+curl -H "X-USER-ID: 1" http://localhost:3001/sse
+```
+
+## Testing the MCP Server
+
+Run the test client:
+
+```bash
+npx ts-node src/test-client.ts
+```
+
+## MCP Client Integration
+
+Connect to the server using the MCP SDK:
+
+```typescript
+import { Client } from '@modelcontextprotocol/sdk/client/index.js';
+import { SSEClientTransport } from '@modelcontextprotocol/sdk/client/sse.js';
+
+const transport = new SSEClientTransport(new URL('http://localhost:3001/sse'), {
+    headers: {
+        'X-USER-ID': '1',
+    },
+});
+
+const client = new Client(
+    {
+        name: 'my-client',
+        version: '1.0.0',
+    },
+    {
+        capabilities: {},
+    }
+);
+
+await client.connect(transport);
+
+// List available tools
+const tools = await client.listTools();
+
+// Call a tool
+const result = await client.callTool({
+    name: 'get_posts',
+    arguments: { published: true },
+});
+```
+
+## Connection Management
+
+-   Each SSE connection creates an isolated MCP server instance
+-   User authentication is per-connection via headers
+-   Graceful shutdown closes all active connections
+-   Health endpoint shows active connection count
+
+## Architecture
+
+```
+Client 1 ──SSE──┐
+               ├─── Express Server ─── ZenStack ─── Prisma ─── SQLite
+Client 2 ──SSE──┘
+```
+
+Each client gets:
+
+-   Dedicated MCP server instance
+-   User-specific data access (via ZenStack policies)
+-   Independent tool execution context
+
+## Development
+
+-   `npm run dev` - Start development server with hot reload
+-   `npm run build` - Build for production
+-   `npm run start` - Start production server
 
 ## Getting started
 
@@ -41,6 +184,7 @@ This example uses a local SQLite database by default. If you want to use to [Pri
 
 1. Set up a new Prisma Postgres instance in the Prisma Data Platform [Console](https://console.prisma.io) and copy the database connection URL.
 2. Update the `datasource` block to use `postgresql` as the `provider` and paste the database connection URL as the value for `url`:
+
     ```prisma
     datasource db {
       provider = "postgresql"
@@ -49,11 +193,13 @@ This example uses a local SQLite database by default. If you want to use to [Pri
     ```
 
     > **Note**: In production environments, we recommend that you set your connection URL via an [environment variable](https://www.prisma.io/docs/orm/more/development-environment/environment-variables/managing-env-files-and-setting-variables), e.g. using a `.env` file.
+
 3. Install the Prisma Accelerate extension:
     ```
     npm install @prisma/extension-accelerate
     ```
 4. Add the Accelerate extension to the `PrismaClient` instance:
+
     ```diff
     + import { withAccelerate } from "@prisma/extension-accelerate"
 
@@ -78,14 +224,13 @@ When `npx prisma migrate dev` is executed against a newly created database, seed
 npx prisma db seed
 ```
 
-
 ### 3. Start the REST API server
 
 ```
 npm run dev
 ```
 
-The server is now running on `http://localhost:3000`. You can now run the API requests, e.g. [`http://localhost:3000/feed`](http://localhost:3000/feed).
+The server is now running on `http://localhost:3001`. You can now run the API requests, e.g. [`http://localhost:3001/feed`](http://localhost:3001/feed).
 
 ## Using the REST API
 
@@ -93,37 +238,37 @@ You can access the REST API of the server using the following endpoints:
 
 ### `GET`
 
-- `/post/:id`: Fetch a single post by its `id`
-- `/feed?searchString={searchString}&take={take}&skip={skip}&orderBy={orderBy}`: Fetch all _published_ posts
-  - Query Parameters
-    - `searchString` (optional): This filters posts by `title` or `content`
-    - `take` (optional): This specifies how many objects should be returned in the list
-    - `skip` (optional): This specifies how many of the returned objects in the list should be skipped
-    - `orderBy` (optional): The sort order for posts in either ascending or descending order. The value can either `asc` or `desc`
-- `/user/:id/drafts`: Fetch user's drafts by their `id`
-- `/users`: Fetch all users
+-   `/post/:id`: Fetch a single post by its `id`
+-   `/feed?searchString={searchString}&take={take}&skip={skip}&orderBy={orderBy}`: Fetch all _published_ posts
+    -   Query Parameters
+        -   `searchString` (optional): This filters posts by `title` or `content`
+        -   `take` (optional): This specifies how many objects should be returned in the list
+        -   `skip` (optional): This specifies how many of the returned objects in the list should be skipped
+        -   `orderBy` (optional): The sort order for posts in either ascending or descending order. The value can either `asc` or `desc`
+-   `/user/:id/drafts`: Fetch user's drafts by their `id`
+-   `/users`: Fetch all users
+
 ### `POST`
 
-- `/post`: Create a new post
-  - Body:
-    - `title: String` (required): The title of the post
-    - `content: String` (optional): The content of the post
-    - `authorEmail: String` (required): The email of the user that creates the post
-- `/signup`: Create a new user
-  - Body:
-    - `email: String` (required): The email address of the user
-    - `name: String` (optional): The name of the user
-    - `postData: PostCreateInput[]` (optional): The posts of the user
+-   `/post`: Create a new post
+    -   Body:
+        -   `title: String` (required): The title of the post
+        -   `content: String` (optional): The content of the post
+        -   `authorEmail: String` (required): The email of the user that creates the post
+-   `/signup`: Create a new user
+    -   Body:
+        -   `email: String` (required): The email address of the user
+        -   `name: String` (optional): The name of the user
+        -   `postData: PostCreateInput[]` (optional): The posts of the user
 
 ### `PUT`
 
-- `/publish/:id`: Toggle the publish value of a post by its `id`
-- `/post/:id/views`: Increases the `viewCount` of a `Post` by one `id`
+-   `/publish/:id`: Toggle the publish value of a post by its `id`
+-   `/post/:id/views`: Increases the `viewCount` of a `Post` by one `id`
 
 ### `DELETE`
 
-- `/post/:id`: Delete a post by its `id`
-
+-   `/post/:id`: Delete a post by its `id`
 
 ## Evolving the app
 
@@ -187,22 +332,22 @@ Update your `index.ts` file by adding a new endpoint to your API:
 
 ```ts
 app.post('/user/:id/profile', async (req, res) => {
-  const { id } = req.params
-  const { bio } = req.body
+    const { id } = req.params;
+    const { bio } = req.body;
 
-  const profile = await prisma.profile.create({
-    data: {
-      bio,
-      user: {
-        connect: {
-          id: Number(id)
-        }
-      }
-    }
-  })
+    const profile = await prisma.profile.create({
+        data: {
+            bio,
+            user: {
+                connect: {
+                    id: Number(id),
+                },
+            },
+        },
+    });
 
-  res.json(profile)
-})
+    res.json(profile);
+});
 ```
 
 #### 2.2 Testing out your new endpoint
@@ -211,10 +356,9 @@ Restart your application server and test out your new endpoint.
 
 ##### `POST`
 
-- `/user/:id/profile`: Create a new profile based on the user id
-  - Body:
-    - `bio: String` : The bio of the user
-
+-   `/user/:id/profile`: Create a new profile based on the user id
+    -   Body:
+        -   `bio: String` : The bio of the user
 
 <details><summary>Expand to view more sample Prisma Client queries on <code>Profile</code></summary>
 
@@ -224,44 +368,44 @@ Here are some more sample Prisma Client queries on the new <code>Profile</code> 
 
 ```ts
 const profile = await prisma.profile.create({
-  data: {
-    bio: 'Hello World',
-    user: {
-      connect: { email: 'alice@prisma.io' },
+    data: {
+        bio: 'Hello World',
+        user: {
+            connect: { email: 'alice@prisma.io' },
+        },
     },
-  },
-})
+});
 ```
 
 ##### Create a new user with a new profile
 
 ```ts
 const user = await prisma.user.create({
-  data: {
-    email: 'john@prisma.io',
-    name: 'John',
-    profile: {
-      create: {
-        bio: 'Hello World',
-      },
+    data: {
+        email: 'john@prisma.io',
+        name: 'John',
+        profile: {
+            create: {
+                bio: 'Hello World',
+            },
+        },
     },
-  },
-})
+});
 ```
 
 ##### Update the profile of an existing user
 
 ```ts
 const userWithUpdatedProfile = await prisma.user.update({
-  where: { email: 'alice@prisma.io' },
-  data: {
-    profile: {
-      update: {
-        bio: 'Hello Friends',
-      },
+    where: { email: 'alice@prisma.io' },
+    data: {
+        profile: {
+            update: {
+                bio: 'Hello Friends',
+            },
+        },
     },
-  },
-})
+});
 ```
 
 </details>
@@ -340,8 +484,8 @@ datasource db {
 
 ## Next steps
 
-- Check out the [Prisma docs](https://www.prisma.io/docs)
-- [Join our community on Discord](https://pris.ly/discord?utm_source=github&utm_medium=prisma_examples&utm_content=next_steps_section) to share feedback and interact with other users.
-- [Subscribe to our YouTube channel](https://pris.ly/youtube?utm_source=github&utm_medium=prisma_examples&utm_content=next_steps_section) for live demos and video tutorials.
-- [Follow us on X](https://pris.ly/x?utm_source=github&utm_medium=prisma_examples&utm_content=next_steps_section) for the latest updates.
-- Report issues or ask [questions on GitHub](https://pris.ly/github?utm_source=github&utm_medium=prisma_examples&utm_content=next_steps_section).
+-   Check out the [Prisma docs](https://www.prisma.io/docs)
+-   [Join our community on Discord](https://pris.ly/discord?utm_source=github&utm_medium=prisma_examples&utm_content=next_steps_section) to share feedback and interact with other users.
+-   [Subscribe to our YouTube channel](https://pris.ly/youtube?utm_source=github&utm_medium=prisma_examples&utm_content=next_steps_section) for live demos and video tutorials.
+-   [Follow us on X](https://pris.ly/x?utm_source=github&utm_medium=prisma_examples&utm_content=next_steps_section) for the latest updates.
+-   Report issues or ask [questions on GitHub](https://pris.ly/github?utm_source=github&utm_medium=prisma_examples&utm_content=next_steps_section).

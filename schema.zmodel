@@ -8,10 +8,11 @@ datasource db {
 }
 
 model User {
-  id    Int     @id @default(autoincrement())
-  email String  @unique
-  name  String?
-  posts Post[]
+  id       Int     @id @default(autoincrement())
+  email    String  @unique
+  name     String?
+  password String? // Password hash for authentication
+  posts    Post[]
 
   @@allow('read', true)
 }
@@ -30,4 +31,21 @@ model Post {
   @@allow('all', auth() == author)
   // logged-in users can view published posts
   @@allow('read', auth() != null && published)
+}
+
+model OAuthClient {
+  id                       Int      @id @default(autoincrement())
+  client_id                String   @unique
+  client_secret            String?
+  client_name              String?
+  redirect_uris            Json     // Array of redirect URIs
+  grant_types              Json     // Array of grant types
+  response_types           Json     // Array of response types
+  scope                    String?
+  client_id_issued_at      Int
+  client_secret_expires_at Int      @default(0)
+  createdAt                DateTime @default(now())
+  updatedAt                DateTime @updatedAt
+
+  @@allow('all', true) // Allow all operations for OAuth clients
 }

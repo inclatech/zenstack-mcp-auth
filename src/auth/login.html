@@ -1,0 +1,157 @@
+<!DOCTYPE html>
+<html>
+    <head>
+        <title>Login to MCP Server</title>
+        <style>
+            body {
+                font-family: Arial, sans-serif;
+                max-width: 400px;
+                margin: 100px auto;
+                padding: 20px;
+                background-color: #f5f5f5;
+            }
+            .login-container {
+                background: white;
+                padding: 30px;
+                border-radius: 8px;
+                box-shadow: 0 2px 10px rgba(0, 0, 0, 0.1);
+            }
+            .form-group {
+                margin-bottom: 15px;
+            }
+            label {
+                display: block;
+                margin-bottom: 5px;
+                font-weight: bold;
+                color: #333;
+            }
+            input[type='number'],
+            input[type='password'] {
+                width: 100%;
+                padding: 10px;
+                border: 1px solid #ddd;
+                border-radius: 4px;
+                font-size: 14px;
+                box-sizing: border-box;
+            }
+            input[type='number']:focus,
+            input[type='password']:focus {
+                outline: none;
+                border-color: #007cba;
+                box-shadow: 0 0 5px rgba(0, 124, 186, 0.3);
+            }
+            button {
+                background: #007cba;
+                color: white;
+                padding: 12px 20px;
+                border: none;
+                border-radius: 4px;
+                cursor: pointer;
+                width: 100%;
+                font-size: 16px;
+                font-weight: bold;
+            }
+            button:hover {
+                background: #005a87;
+            }
+            .error {
+                color: #d32f2f;
+                margin-bottom: 15px;
+                padding: 10px;
+                background-color: #ffebee;
+                border: 1px solid #ffcdd2;
+                border-radius: 4px;
+            }
+            .app-info {
+                background-color: #e3f2fd;
+                padding: 15px;
+                border-radius: 4px;
+                margin-bottom: 20px;
+                border-left: 4px solid #2196f3;
+            }
+            .demo-info {
+                background-color: #fff3e0;
+                padding: 10px;
+                border-radius: 4px;
+                margin-top: 20px;
+                font-size: 12px;
+                color: #666;
+                border-left: 4px solid #ff9800;
+            }
+            h2 {
+                color: #333;
+                margin-bottom: 20px;
+                text-align: center;
+            }
+        </style>
+    </head>
+    <body>
+        <div class="login-container">
+            <h2>Login to MCP Server</h2>
+
+            <div class="app-info"><strong>Application:</strong> <span id="client-name">Loading...</span></div>
+
+            <form method="POST" action="/auth/login">
+                <input type="hidden" name="client_id" id="client-id" />
+                <input type="hidden" name="state" id="state" />
+                <input type="hidden" name="code_challenge" id="code-challenge" />
+                <input type="hidden" name="redirect_uri" id="redirect-uri" />
+                <input type="hidden" name="scopes" id="scopes" />
+
+                <div class="form-group">
+                    <label for="user_id">User ID:</label>
+                    <input
+                        type="number"
+                        id="user_id"
+                        name="user_id"
+                        required
+                        min="1"
+                        placeholder="Enter your user ID"
+                    />
+                </div>
+
+                <div class="form-group">
+                    <label for="password">Password:</label>
+                    <input type="password" id="password" name="password" required placeholder="Enter your password" />
+                </div>
+
+                <button type="submit">Login</button>
+            </form>
+
+            <div class="demo-info">
+                <strong>Demo Instructions:</strong><br />
+                Use any valid user ID from the database (1, 2, or 3) and password "password123"
+            </div>
+        </div>
+
+        <script>
+            // Extract parameters from URL
+            const urlParams = new URLSearchParams(window.location.search);
+
+            // Populate form fields from URL parameters
+            document.getElementById('client-id').value = urlParams.get('client_id') || '';
+            document.getElementById('state').value = urlParams.get('state') || '';
+            document.getElementById('code-challenge').value = urlParams.get('code_challenge') || '';
+            document.getElementById('redirect-uri').value = urlParams.get('redirect_uri') || '';
+            document.getElementById('scopes').value = urlParams.get('scope') || '';
+
+            // Set client name (we'll get this from the client_id parameter or set a default)
+            const clientName = urlParams.get('client_name') || 'MCP Application';
+            document.getElementById('client-name').textContent = clientName;
+
+            // Validate required parameters
+            const requiredParams = ['client_id', 'code_challenge', 'redirect_uri'];
+            const missingParams = requiredParams.filter((param) => !urlParams.get(param));
+
+            if (missingParams.length > 0) {
+                document.querySelector('.login-container').innerHTML = `
+                <h2>Login Error</h2>
+                <div class="error">
+                    Missing required parameters: ${missingParams.join(', ')}
+                </div>
+                <p>Please check the authorization URL and try again.</p>
+            `;
+            }
+        </script>
+    </body>
+</html>
