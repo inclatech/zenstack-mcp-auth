@@ -13,11 +13,14 @@ generator client {
 }
 
 model User {
-  id       Int     @id() @default(autoincrement())
-  email    String  @unique()
-  name     String?
-  password String
-  posts    Post[]
+  id            Int                 @id() @default(autoincrement())
+  email         String              @unique()
+  name          String?
+  password      String
+  posts         Post[]
+  authCodes     AuthorizationCode[]
+  accessTokens  AccessToken[]
+  refreshTokens RefreshToken[]
 }
 
 model Post {
@@ -45,4 +48,39 @@ model OAuthClient {
   client_secret_expires_at Int      @default(0)
   createdAt                DateTime @default(now())
   updatedAt                DateTime @updatedAt()
+}
+
+model AuthorizationCode {
+  id            Int      @id() @default(autoincrement())
+  code          String   @unique()
+  clientId      String
+  userId        Int
+  codeChallenge String
+  redirectUri   String
+  expiresAt     DateTime
+  scopes        Json
+  createdAt     DateTime @default(now())
+  user          User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+}
+
+model AccessToken {
+  id        Int      @id() @default(autoincrement())
+  token     String   @unique()
+  clientId  String
+  userId    Int
+  scopes    Json
+  expiresAt DateTime
+  createdAt DateTime @default(now())
+  user      User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+}
+
+model RefreshToken {
+  id        Int      @id() @default(autoincrement())
+  token     String   @unique()
+  clientId  String
+  userId    Int
+  scopes    Json
+  expiresAt DateTime
+  createdAt DateTime @default(now())
+  user      User     @relation(fields: [userId], references: [id], onDelete: Cascade)
 }

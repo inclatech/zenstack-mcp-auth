@@ -13,39 +13,6 @@ import { config } from '../config';
 import { AuthInfo } from '@modelcontextprotocol/sdk/server/auth/types.js';
 import { DatabaseClientsStore } from './DatabaseClientsStore';
 
-// In-memory stores for simplicity - in production, use proper storage
-const authCodes = new Map<
-    string,
-    {
-        clientId: string;
-        userId: number;
-        codeChallenge: string;
-        redirectUri: string;
-        expiresAt: number;
-        scopes: string[];
-    }
->();
-
-const accessTokens = new Map<
-    string,
-    {
-        clientId: string;
-        userId: number;
-        scopes: string[];
-        expiresAt: number;
-    }
->();
-
-const refreshTokens = new Map<
-    string,
-    {
-        clientId: string;
-        userId: number;
-        scopes: string[];
-        expiresAt: number;
-    }
->();
-
 export class PasswordAuthProvider implements OAuthServerProvider {
     private _clientsStore: DatabaseClientsStore;
     private prisma: PrismaClient;
@@ -138,7 +105,7 @@ export class PasswordAuthProvider implements OAuthServerProvider {
 
             // Validate password using bcrypt
             const isPasswordValid = await bcrypt.compare(password, user.password);
-            
+
             if (!isPasswordValid) {
                 return { success: false, error: 'Invalid password' };
             }
@@ -146,14 +113,17 @@ export class PasswordAuthProvider implements OAuthServerProvider {
             // Generate authorization code
             const authCode = crypto.randomBytes(32).toString('hex');
 
-            // Store authorization code with the user's ID
-            authCodes.set(authCode, {
-                clientId,
-                userId: user.id,
-                codeChallenge,
-                redirectUri,
-                expiresAt: Date.now() + 600000, // 10 minutes
-                scopes,
+            // Store authorization code in database
+            await this.prisma.authorizationCode.create({
+                data: {
+                    code: authCode,
+                    clientId,
+                    userId: user.id,
+                    codeChallenge,
+                    redirectUri,
+                    expiresAt: new Date(Date.now() + 600000), // 10 minutes
+                    scopes,
+                },
             });
 
             return { success: true, authCode };
@@ -170,13 +140,18 @@ export class PasswordAuthProvider implements OAuthServerProvider {
         client: OAuthClientInformationFull,
         authorizationCode: string
     ): Promise<string> {
-        const authData = authCodes.get(authorizationCode);
+        const authData = await this.prisma.authorizationCode.findUnique({
+            where: { code: authorizationCode },
+        });
+
         if (!authData || authData.clientId !== client.client_id) {
             throw new Error('Invalid authorization code');
         }
 
-        if (Date.now() > authData.expiresAt) {
-            authCodes.delete(authorizationCode);
+        if (Date.now() > authData.expiresAt.getTime()) {
+            await this.prisma.authorizationCode.delete({
+                where: { code: authorizationCode },
+            });
             throw new Error('Authorization code expired');
         }
 
@@ -192,14 +167,18 @@ export class PasswordAuthProvider implements OAuthServerProvider {
         codeVerifier?: string,
         redirectUri?: string
     ): Promise<OAuthTokens> {
-        const authData = authCodes.get(authorizationCode);
+        const authData = await this.prisma.authorizationCode.findUnique({
+            where: { code: authorizationCode },
+        });
 
         if (!authData || authData.clientId !== client.client_id) {
             throw new Error('Invalid authorization code');
         }
 
-        if (Date.now() > authData.expiresAt) {
-            authCodes.delete(authorizationCode);
+        if (Date.now() > authData.expiresAt.getTime()) {
+            await this.prisma.authorizationCode.delete({
+                where: { code: authorizationCode },
+            });
             throw new Error('Authorization code expired');
         }
 
@@ -220,32 +199,40 @@ export class PasswordAuthProvider implements OAuthServerProvider {
         const accessToken = crypto.randomBytes(32).toString('hex');
         const refreshToken = crypto.randomBytes(32).toString('hex');
         const expiresIn = 3600; // 1 hour
-        const expiresAt = Date.now() + expiresIn * 1000;
+        const expiresAt = new Date(Date.now() + expiresIn * 1000);
 
-        // Store tokens
-        accessTokens.set(accessToken, {
-            clientId: client.client_id,
-            userId: authData.userId,
-            scopes: authData.scopes,
-            expiresAt,
+        // Store tokens in database
+        await this.prisma.accessToken.create({
+            data: {
+                token: accessToken,
+                clientId: client.client_id,
+                userId: authData.userId,
+                scopes: authData.scopes as any,
+                expiresAt,
+            },
         });
 
-        refreshTokens.set(refreshToken, {
-            clientId: client.client_id,
-            userId: authData.userId,
-            scopes: authData.scopes,
-            expiresAt: Date.now() + 86400 * 30 * 1000, // 30 days
+        await this.prisma.refreshToken.create({
+            data: {
+                token: refreshToken,
+                clientId: client.client_id,
+                userId: authData.userId,
+                scopes: authData.scopes as any,
+                expiresAt: new Date(Date.now() + 86400 * 30 * 1000), // 30 days
+            },
         });
 
         // Clean up authorization code
-        authCodes.delete(authorizationCode);
+        await this.prisma.authorizationCode.delete({
+            where: { code: authorizationCode },
+        });
 
         return {
             access_token: accessToken,
             token_type: 'Bearer',
             expires_in: expiresIn,
             refresh_token: refreshToken,
-            scope: authData.scopes.join(' '),
+            scope: (authData.scopes as string[]).join(' '),
         };
     }
 
@@ -257,41 +244,53 @@ export class PasswordAuthProvider implements OAuthServerProvider {
         refreshToken: string,
         scopes?: string[]
     ): Promise<OAuthTokens> {
-        const tokenData = refreshTokens.get(refreshToken);
+        const tokenData = await this.prisma.refreshToken.findUnique({
+            where: { token: refreshToken },
+        });
 
         if (!tokenData || tokenData.clientId !== client.client_id) {
             throw new Error('Invalid refresh token');
         }
 
-        if (Date.now() > tokenData.expiresAt) {
-            refreshTokens.delete(refreshToken);
+        if (Date.now() > tokenData.expiresAt.getTime()) {
+            await this.prisma.refreshToken.delete({
+                where: { token: refreshToken },
+            });
             throw new Error('Refresh token expired');
         }
 
         // Use provided scopes or fall back to original scopes
-        const finalScopes = scopes || tokenData.scopes;
+        const finalScopes = scopes || (tokenData.scopes as string[]);
 
         // Generate new access token
         const accessToken = crypto.randomBytes(32).toString('hex');
         const newRefreshToken = crypto.randomBytes(32).toString('hex');
         const expiresIn = 3600; // 1 hour
-        const expiresAt = Date.now() + expiresIn * 1000;
+        const expiresAt = new Date(Date.now() + expiresIn * 1000);
 
         // Store new access token
-        accessTokens.set(accessToken, {
-            clientId: client.client_id,
-            userId: tokenData.userId,
-            scopes: finalScopes,
-            expiresAt,
+        await this.prisma.accessToken.create({
+            data: {
+                token: accessToken,
+                clientId: client.client_id,
+                userId: tokenData.userId,
+                scopes: finalScopes,
+                expiresAt,
+            },
         });
 
         // Update refresh token (rotate it)
-        refreshTokens.delete(refreshToken);
-        refreshTokens.set(newRefreshToken, {
-            clientId: client.client_id,
-            userId: tokenData.userId,
-            scopes: finalScopes,
-            expiresAt: Date.now() + 86400 * 30 * 1000, // 30 days
+        await this.prisma.refreshToken.delete({
+            where: { token: refreshToken },
+        });
+        await this.prisma.refreshToken.create({
+            data: {
+                token: newRefreshToken,
+                clientId: client.client_id,
+                userId: tokenData.userId,
+                scopes: finalScopes,
+                expiresAt: new Date(Date.now() + 86400 * 30 * 1000), // 30 days
+            },
         });
 
         return {
@@ -307,22 +306,26 @@ export class PasswordAuthProvider implements OAuthServerProvider {
      * Verifies access token and returns auth info
      */
     async verifyAccessToken(token: string): Promise<AuthInfo> {
-        const tokenData = accessTokens.get(token);
+        const tokenData = await this.prisma.accessToken.findUnique({
+            where: { token },
+        });
 
         if (!tokenData) {
             throw new Error('Invalid access token');
         }
 
-        if (Date.now() > tokenData.expiresAt) {
-            accessTokens.delete(token);
+        if (Date.now() > tokenData.expiresAt.getTime()) {
+            await this.prisma.accessToken.delete({
+                where: { token },
+            });
             throw new Error('Access token expired');
         }
 
         return {
             token,
             clientId: tokenData.clientId,
-            scopes: tokenData.scopes,
-            expiresAt: Math.floor(tokenData.expiresAt / 1000),
+            scopes: tokenData.scopes as string[],
+            expiresAt: Math.floor(tokenData.expiresAt.getTime() / 1000),
             extra: {
                 userId: tokenData.userId,
             },
@@ -336,16 +339,24 @@ export class PasswordAuthProvider implements OAuthServerProvider {
         const { token, token_type_hint } = request;
 
         // Try to revoke as access token
-        const accessTokenData = accessTokens.get(token);
+        const accessTokenData = await this.prisma.accessToken.findUnique({
+            where: { token },
+        });
         if (accessTokenData && accessTokenData.clientId === client.client_id) {
-            accessTokens.delete(token);
+            await this.prisma.accessToken.delete({
+                where: { token },
+            });
             return;
         }
 
         // Try to revoke as refresh token
-        const refreshTokenData = refreshTokens.get(token);
+        const refreshTokenData = await this.prisma.refreshToken.findUnique({
+            where: { token },
+        });
         if (refreshTokenData && refreshTokenData.clientId === client.client_id) {
-            refreshTokens.delete(token);
+            await this.prisma.refreshToken.delete({
+                where: { token },
+            });
             return;
         }
 

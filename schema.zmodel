@@ -12,11 +12,14 @@ plugin zod {
 }
 
 model User {
-  id       Int     @id @default(autoincrement())
-  email    String  @unique
-  name     String?
-  password String  @password @omit
-  posts    Post[]
+  id            Int                 @id @default(autoincrement())
+  email         String              @unique
+  name          String?
+  password      String              @password @omit
+  posts         Post[]
+  authCodes     AuthorizationCode[]
+  accessTokens  AccessToken[]
+  refreshTokens RefreshToken[]
 
   @@allow('read', true)
 }
@@ -37,6 +40,9 @@ model Post {
   @@allow('read', auth() != null && published)
 }
 
+
+
+// OAuth2 models
 model OAuthClient {
   id                       Int      @id @default(autoincrement())
   client_id                String   @unique
@@ -50,6 +56,42 @@ model OAuthClient {
   client_secret_expires_at Int      @default(0)
   createdAt                DateTime @default(now())
   updatedAt                DateTime @updatedAt
+}
 
-  @@allow('all', true) // Allow all operations for OAuth clients
+model AuthorizationCode {
+  id            Int      @id @default(autoincrement())
+  code          String   @unique
+  clientId      String
+  userId        Int
+  codeChallenge String
+  redirectUri   String
+  expiresAt     DateTime
+  scopes        Json     // Array of scopes
+  createdAt     DateTime @default(now())
+
+  user          User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+}
+
+model AccessToken {
+  id        Int      @id @default(autoincrement())
+  token     String   @unique
+  clientId  String
+  userId    Int
+  scopes    Json     // Array of scopes
+  expiresAt DateTime
+  createdAt DateTime @default(now())
+
+  user      User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+}
+
+model RefreshToken {
+  id        Int      @id @default(autoincrement())
+  token     String   @unique
+  clientId  String
+  userId    Int
+  scopes    Json     // Array of scopes
+  expiresAt DateTime
+  createdAt DateTime @default(now())
+
+  user      User     @relation(fields: [userId], references: [id], onDelete: Cascade)
 }
