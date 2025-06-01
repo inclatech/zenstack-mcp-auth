@@ -5,8 +5,10 @@
     "scripts": {
         "dev": "ts-node src/index.ts",
         "start": "node dist/index.js",
-        "build": "tsc",
-        "mcp": "ts-node src/index.ts",
+        "build": "tsc & npm run generate",
+        "generate": "zenstack generate",
+        "db:push": "prisma db push",
+        "db:seed": "prisma db seed",
         "test": "ts-node src/test-client.ts"
     },
     "dependencies": {
