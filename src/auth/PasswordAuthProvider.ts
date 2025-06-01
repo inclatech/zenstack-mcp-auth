@@ -106,7 +106,7 @@ export class PasswordAuthProvider implements OAuthServerProvider {
      * Handles the login form submission
      */
     async handleLogin(
-        userId: number,
+        email: string,
         password: string,
         clientId: string,
         state: string,
@@ -115,27 +115,41 @@ export class PasswordAuthProvider implements OAuthServerProvider {
         scopes: string[]
     ): Promise<{ success: boolean; authCode?: string; error?: string }> {
         try {
-            // Simple password validation - in production, use proper password hashing
-            if (password !== 'password123') {
-                return { success: false, error: 'Invalid password' };
-            }
-
-            // Verify user exists in database
+            // Verify user exists in database and get their hashed password
+            // Explicitly select password field to bypass ZenStack @omit directive
             const user = await this.prisma.user.findUnique({
-                where: { id: userId },
+                where: { email },
+                select: {
+                    id: true,
+                    email: true,
+                    name: true,
+                    password: true, // Explicitly select password field
+                },
             });
 
             if (!user) {
                 return { success: false, error: 'User not found' };
             }
 
+            if (!user.password) {
+                console.error('Password field is null/undefined for user:', email);
+                return { success: false, error: 'Password not accessible' };
+            }
+
+            // Validate password using bcrypt
+            const isPasswordValid = await bcrypt.compare(password, user.password);
+            
+            if (!isPasswordValid) {
+                return { success: false, error: 'Invalid password' };
+            }
+
             // Generate authorization code
             const authCode = crypto.randomBytes(32).toString('hex');
 
-            // Store authorization code
+            // Store authorization code with the user's ID
             authCodes.set(authCode, {
                 clientId,
-                userId,
+                userId: user.id,
                 codeChallenge,
                 redirectUri,
                 expiresAt: Date.now() + 600000, // 10 minutes

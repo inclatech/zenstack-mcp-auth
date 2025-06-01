@@ -37,10 +37,10 @@ async function performOAuthFlow(): Promise<string> {
     const loginResponse = await fetch(`${config.baseUrl}/auth/login`, {
         method: 'POST',
         headers: {
-            'Content-Type': 'application/x-www-form-urlencoded',
+            'Content-Type': 'application/json',
         },
-        body: new URLSearchParams({
-            user_id: '1', // User ID 1
+        body: JSON.stringify({
+            email: 'alice@prisma.io', // Use email instead of user ID
             password: 'password123',
             client_id: 'test_client',
             state: state,
@@ -51,17 +51,19 @@ async function performOAuthFlow(): Promise<string> {
         redirect: 'manual', // Don't follow redirects
     });
 
-    if (loginResponse.status !== 302) {
-        throw new Error(`Login failed with status ${loginResponse.status}`);
+    if (!loginResponse.ok) {
+        const errorData = await loginResponse.json();
+        throw new Error(`Login failed: ${errorData.error || 'Unknown error'}`);
     }
 
-    const location = loginResponse.headers.get('location');
-    if (!location) {
-        throw new Error('No redirect location found');
+    const loginResult = await loginResponse.json();
+
+    if (!loginResult.success || !loginResult.redirectUrl) {
+        throw new Error(`Login failed: ${loginResult.error || 'No redirect URL received'}`);
     }
 
     // Extract authorization code from redirect URL
-    const redirectUrl = new URL(location);
+    const redirectUrl = new URL(loginResult.redirectUrl);
     const code = redirectUrl.searchParams.get('code');
     const returnedState = redirectUrl.searchParams.get('state');
 
@@ -144,10 +146,10 @@ async function testMCPClient() {
             tools.tools.map((t) => t.name)
         );
 
-        console.log('Testing get_posts tool...');
+        console.log('Testing Post_findMany tool...');
         const postsResult = await client.callTool({
-            name: 'get_posts',
-            arguments: {},
+            name: 'Post_findMany',
+            arguments: { args: {} },
         });
         console.log('✅ Posts result:', (postsResult.content as any)[0]?.text?.substring(0, 200) + '...');
 

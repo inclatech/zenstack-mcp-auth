@@ -25,7 +25,7 @@
                 font-weight: bold;
                 color: #333;
             }
-            input[type='number'],
+            input[type='email'],
             input[type='password'] {
                 width: 100%;
                 padding: 10px;
@@ -34,7 +34,7 @@
                 font-size: 14px;
                 box-sizing: border-box;
             }
-            input[type='number']:focus,
+            input[type='email']:focus,
             input[type='password']:focus {
                 outline: none;
                 border-color: #007cba;
@@ -91,22 +91,18 @@
 
             <div class="app-info"><strong>Application:</strong> <span id="client-name">Loading...</span></div>
 
-            <form method="POST" action="/auth/login">
-                <input type="hidden" name="client_id" id="client-id" />
-                <input type="hidden" name="state" id="state" />
-                <input type="hidden" name="code_challenge" id="code-challenge" />
-                <input type="hidden" name="redirect_uri" id="redirect-uri" />
-                <input type="hidden" name="scopes" id="scopes" />
+            <!-- Error message container -->
+            <div id="error-container" class="error" style="display: none"></div>
 
+            <form id="login-form">
                 <div class="form-group">
-                    <label for="user_id">User ID:</label>
+                    <label for="email">Email:</label>
                     <input
-                        type="number"
-                        id="user_id"
-                        name="user_id"
+                        type="email"
+                        id="email"
+                        name="email"
                         required
-                        min="1"
-                        placeholder="Enter your user ID"
+                        placeholder="Enter your email address"
                     />
                 </div>
 
@@ -115,25 +111,17 @@
                     <input type="password" id="password" name="password" required placeholder="Enter your password" />
                 </div>
 
-                <button type="submit">Login</button>
+                <button type="submit" id="login-button">Login</button>
             </form>
 
             <div class="demo-info">
                 <strong>Demo Instructions:</strong><br />
-                Use any valid user ID from the database (1, 2, or 3) and password "password123"
+                Use any valid email from the database (alice@prisma.io, nilu@prisma.io, or mahmoud@prisma.io) and password "password123"
             </div>
         </div>
-
         <script>
             // Extract parameters from URL
             const urlParams = new URLSearchParams(window.location.search);
-
-            // Populate form fields from URL parameters
-            document.getElementById('client-id').value = urlParams.get('client_id') || '';
-            document.getElementById('state').value = urlParams.get('state') || '';
-            document.getElementById('code-challenge').value = urlParams.get('code_challenge') || '';
-            document.getElementById('redirect-uri').value = urlParams.get('redirect_uri') || '';
-            document.getElementById('scopes').value = urlParams.get('scope') || '';
 
             // Set client name (we'll get this from the client_id parameter or set a default)
             const clientName = urlParams.get('client_name') || 'MCP Application';
@@ -151,6 +139,69 @@
                 </div>
                 <p>Please check the authorization URL and try again.</p>
             `;
+            } else {
+                // Handle form submission only if parameters are valid
+                document.getElementById('login-form').addEventListener('submit', async function (e) {
+                    e.preventDefault();
+
+                    const errorContainer = document.getElementById('error-container');
+                    const loginButton = document.getElementById('login-button');
+
+                    // Hide previous errors
+                    errorContainer.style.display = 'none';
+
+                    // Disable button and show loading
+                    loginButton.disabled = true;
+                    loginButton.textContent = 'Logging in...';
+
+                    try {
+                        // Get all URL parameters dynamically
+                        const urlParams = new URLSearchParams(window.location.search);
+
+                        // Start with form data
+                        const requestData = {
+                            email: document.getElementById('email').value,
+                            password: document.getElementById('password').value,
+                        };
+
+                        // Add all URL parameters to the request body
+                        for (const [key, value] of urlParams.entries()) {
+                            requestData[key] = value;
+                        }
+
+                        // Send AJAX request with JSON
+                        const response = await fetch('/auth/login', {
+                            method: 'POST',
+                            headers: {
+                                'Content-Type': 'application/json',
+                            },
+                            body: JSON.stringify(requestData),
+                        });
+
+                        const result = await response.json();
+
+                        if (result.success && result.redirectUrl) {
+                            // Redirect on success
+                            window.location.href = result.redirectUrl;
+                        } else {
+                            // Show error message
+                            errorContainer.textContent = result.error || 'Invalid username or password';
+                            errorContainer.style.display = 'block';
+
+                            // Re-enable button
+                            loginButton.disabled = false;
+                            loginButton.textContent = 'Login';
+                        }
+                    } catch (error) {
+                        console.error('Login error:', error);
+                        errorContainer.textContent = 'Invalid username or password';
+                        errorContainer.style.display = 'block';
+
+                        // Re-enable button
+                        loginButton.disabled = false;
+                        loginButton.textContent = 'Login';
+                    }
+                });
             }
         </script>
     </body>

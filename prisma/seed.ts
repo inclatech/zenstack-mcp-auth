@@ -4,7 +4,7 @@ import bcrypt from 'bcrypt';
 const prisma = new PrismaClient();
 
 // Demo password hash for "password123"
-const passwordHash = bcrypt.hashSync('password123', 10);
+const passwordHash = bcrypt.hashSync('password123', 12);
 
 const userData: Prisma.UserCreateInput[] = [
     {
@@ -58,10 +58,16 @@ const userData: Prisma.UserCreateInput[] = [
 async function main() {
     console.log(`Start seeding ...`);
     for (const u of userData) {
-        const user = await prisma.user.create({
-            data: u,
+        const user = await prisma.user.upsert({
+            where: { email: u.email },
+            create: u,
+            update: {
+                name: u.name,
+                password: u.password, // Ensure password is updated
+                // Don't update posts in update operation to avoid conflicts
+            },
         });
-        console.log(`Created user with id: ${user.id}`);
+        console.log(`Created/updated user with id: ${user.id}, email: ${user.email}`);
     }
     console.log(`Seeding finished.`);
 }

@@ -84,17 +84,19 @@ export class AuthMiddleware {
 
     private async handleLogin(req: Request, res: Response) {
         try {
-            const { user_id, password, client_id, state, code_challenge, redirect_uri, scopes } = req.body;
+            const { email, password, client_id, state, code_challenge, redirect_uri, scopes } = req.body;
 
-            if (!user_id || !password || !client_id || !code_challenge || !redirect_uri) {
-                return res.status(400).send('Missing required parameters');
+            if (!email || !password || !client_id || !code_challenge || !redirect_uri) {
+                return res.status(400).json({
+                    success: false,
+                    error: 'Missing required parameters',
+                });
             }
 
-            const userId = parseInt(user_id);
             const scopesArray = scopes ? scopes.split(' ').filter(Boolean) : [];
 
             const result = await this.authProvider.handleLogin(
-                userId,
+                email,
                 password,
                 client_id,
                 state || '',
@@ -104,37 +106,30 @@ export class AuthMiddleware {
             );
 
             if (result.success && result.authCode) {
-                // Redirect with authorization code
+                // Return redirect URL instead of redirecting
                 const redirectUrl = new URL(redirect_uri);
                 redirectUrl.searchParams.set('code', result.authCode);
                 if (state) {
                     redirectUrl.searchParams.set('state', state);
                 }
-                res.redirect(redirectUrl.toString());
+
+                res.json({
+                    success: true,
+                    redirectUrl: redirectUrl.toString(),
+                });
             } else {
-                // Show error
-                res.status(400).send(`
-<!DOCTYPE html>
-<html>
-<head>
-    <title>Login Error</title>
-    <style>
-        body { font-family: Arial, sans-serif; max-width: 400px; margin: 100px auto; padding: 20px; }
-        .error { color: red; margin-bottom: 15px; }
-        a { color: #007cba; text-decoration: none; }
-        a:hover { text-decoration: underline; }
-    </style>
-</head>
-<body>
-    <h2>Login Error</h2>
-    <div class="error">${result.error || 'Login failed'}</div>
-    <a href="javascript:history.back()">← Go back and try again</a>
-</body>
-</html>`);
+                // Return JSON error
+                res.status(400).json({
+                    success: false,
+                    error: result.error || 'Invalid username or password',
+                });
             }
         } catch (error) {
             console.error('Login handler error:', error);
-            res.status(500).send('Internal server error');
+            res.status(500).json({
+                success: false,
+                error: 'Internal server error',
+            });
         }
     }
 
