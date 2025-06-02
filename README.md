@@ -1,10 +1,10 @@
-# ZenStack MCP Server
+# ZenStack Remote MCP Server with Authorization
 
-A Model Context Protocol (MCP) SSE HTTP server support auto-generated CRUD tools of database with Authorization and credential Authentication.
+A Model Context Protocol (MCP) Streamable HTTP server supporting auto-generated CRUD tools of database with Authorization and credential Authentication.
 
 ## Features
 
--   **MCP SSE Protocol**: Multiple simultaneous MCP server with credential Authentication support.
+-   **MCP Streamable HTTP Protocol**: Multiple simultaneous MCP server connections with credential Authentication support.
 -   **ZenStack Integration**: Automatically generates MCP tools for the CRUD operations of the models defined in the ZenStack schema. This demo will use a simple blog application with `User` and `Post` models.
 
 ## Auto-generated Tools
@@ -80,7 +80,7 @@ All the most popular MCP clients (Claude Desktop, Cursor, Github Copilot) use th
     "servers": {
         "my-mcp-server": {
             "command": "npx",
-            "args": ["-y", "mcp-remote", "http://localhost:3001/sse"]
+            "args": ["-y", "mcp-remote", "http://localhost:3001/mcp"]
         }
     }
 }

@@ -1,7 +1,8 @@
 import { Client } from '@modelcontextprotocol/sdk/client/index.js';
-import { SSEClientTransport } from '@modelcontextprotocol/sdk/client/sse.js';
+import { StreamableHTTPClientTransport } from '@modelcontextprotocol/sdk/client/streamableHttp.js';
 import crypto from 'crypto';
 import { config } from './config';
+import { request } from 'http';
 
 // OAuth helper functions
 function generateCodeVerifier(): string {
@@ -15,6 +16,47 @@ function generateCodeChallenge(verifier: string): string {
 async function performOAuthFlow(): Promise<string> {
     console.log('🔐 Starting OAuth flow...');
 
+    // Step 0: Register the test client using the OAuth registration endpoint
+    console.log('📝 Registering test client via OAuth endpoint...');
+    try {
+        const registerResponse = await fetch(`${config.baseUrl}/register`, {
+            method: 'POST',
+            headers: {
+                'Content-Type': 'application/json',
+            },
+            body: JSON.stringify({
+                client_name: 'Test MCP Client',
+                redirect_uris: [`${config.baseUrl}/callback`],
+                grant_types: ['authorization_code', 'refresh_token'],
+                response_types: ['code'],
+                scope: 'read write',
+            }),
+        });
+
+        if (registerResponse.ok) {
+            const registerResult = await registerResponse.json();
+            console.log('✅ Test client registered successfully');
+            console.log('ℹ️ Using registered client_id:', registerResult.client_id);
+            console.log('ℹ️ Using registered client_secret:', registerResult.client_secret);
+
+            // Use the dynamically registered client credentials
+            const dynamicClientId = registerResult.client_id;
+            const dynamicClientSecret = registerResult.client_secret;
+
+            return await performOAuthFlowWithCredentials(dynamicClientId, dynamicClientSecret);
+        } else {
+            // Fallback to using predefined test client
+            const errorText = await registerResponse.text();
+            console.log('ℹ️ Client registration failed, using fallback credentials:', errorText);
+            return await performOAuthFlowWithCredentials('test_client', 'test_secret');
+        }
+    } catch (error) {
+        console.log('ℹ️ Client registration failed, using fallback credentials:', error);
+        return await performOAuthFlowWithCredentials('test_client', 'test_secret');
+    }
+}
+
+async function performOAuthFlowWithCredentials(clientId: string, clientSecret: string): Promise<string> {
     // Generate PKCE parameters
     const codeVerifier = generateCodeVerifier();
     const codeChallenge = generateCodeChallenge(codeVerifier);
@@ -23,7 +65,7 @@ async function performOAuthFlow(): Promise<string> {
     // Step 1: Get authorization code by simulating login
     const authParams = new URLSearchParams({
         response_type: 'code',
-        client_id: 'test_client',
+        client_id: clientId,
         redirect_uri: `${config.baseUrl}/callback`,
         scope: 'read write',
         state: state,
@@ -40,9 +82,9 @@ async function performOAuthFlow(): Promise<string> {
             'Content-Type': 'application/json',
         },
         body: JSON.stringify({
-            email: 'alice@prisma.io', // Use email instead of user ID
+            email: 'alex@zenstack.dev', // Use email from seed data
             password: 'password123',
-            client_id: 'test_client',
+            client_id: clientId,
             state: state,
             code_challenge: codeChallenge,
             redirect_uri: `${config.baseUrl}/callback`,
@@ -85,8 +127,8 @@ async function performOAuthFlow(): Promise<string> {
         },
         body: new URLSearchParams({
             grant_type: 'authorization_code',
-            client_id: 'test_client',
-            client_secret: 'test_secret',
+            client_id: clientId,
+            client_secret: clientSecret,
             code: code,
             redirect_uri: `${config.baseUrl}/callback`,
             code_verifier: codeVerifier,
@@ -109,13 +151,10 @@ async function testMCPClient() {
         // Get OAuth access token
         const accessToken = await performOAuthFlow();
 
-        console.log('Creating SSE transport with Bearer token...');
-        // Since EventSource doesn't support Authorization headers,
-        // we'll pass the token as a query parameter
-        const sseUrl = new URL(`${config.baseUrl}/sse`);
-        sseUrl.searchParams.set('access_token', accessToken);
+        console.log('Creating Streamable HTTP transport with Bearer token...');
+        const mcpUrl = new URL(`${config.baseUrl}/mcp`);
 
-        const transport = new SSEClientTransport(sseUrl, {
+        const transport = new StreamableHTTPClientTransport(mcpUrl, {
             requestInit: {
                 headers: {
                     'Authorization': `Bearer ${accessToken}`,

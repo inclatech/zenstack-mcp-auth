@@ -1,14 +1,12 @@
 import { PrismaClient } from '@prisma/client';
 import { enhance } from '@zenstackhq/runtime';
 import express, { Request, Response } from 'express';
-import { Server } from '@modelcontextprotocol/sdk/server/index.js';
-import { SSEServerTransport } from '@modelcontextprotocol/sdk/server/sse.js';
-import { CallToolRequestSchema, ListToolsRequestSchema, Tool } from '@modelcontextprotocol/sdk/types.js';
-import { z } from 'zod';
+import { StreamableHTTPServerTransport } from '@modelcontextprotocol/sdk/server/streamableHttp.js';
+import { isInitializeRequest } from '@modelcontextprotocol/sdk/types.js';
 import { AuthMiddleware } from './auth/AuthMiddleware';
 import { config } from './config';
-//import { createMCPServer } from './mcp-server';
 import { createMCPServer } from './mcp-server';
+import crypto from 'crypto';
 
 const prisma = new PrismaClient();
 const app = express();
@@ -16,8 +14,8 @@ const app = express();
 // Initialize authentication middleware
 const authMiddleware = new AuthMiddleware(prisma);
 
-// Store active SSE connections
-const activeConnections = new Map<string, SSEServerTransport>();
+// Map to store transports by session ID
+const transports: { [sessionId: string]: StreamableHTTPServerTransport } = {};
 
 app.use(express.json());
 app.use(express.urlencoded({ extended: true })); // For form submissions
@@ -55,68 +53,65 @@ export function getPrisma(userId: number | null) {
     return enhance(prisma, { user });
 }
 
-// SSE endpoint for MCP connections - handle both GET and POST
-const handleSSEConnection = async (req: Request, res: Response) => {
+// HTTP endpoint for MCP connections using Streamable HTTP transport
+const handleMCPConnection = async (req: Request, res: Response) => {
     const userId = getUserId(req);
 
-    // Require authentication for SSE connections
+    // Require authentication for MCP connections
     if (!userId) {
         return authMiddleware.handle401(req, res);
     }
 
-    // Create MCP server for this connection
-    const transport = new SSEServerTransport('/message', res);
-    console.log(`New SSE connection: ${transport.sessionId}, User ID: ${userId}`);
+    // Check if this is a new connection or existing session
+    const sessionId = req.header('mcp-session-Id') || (req.query.sessionId as string) || undefined;
+    let transport: StreamableHTTPServerTransport;
 
-    // Store connection
-    activeConnections.set(transport.sessionId, transport);
-    const mcpServer = createMCPServer(userId);
+    if (sessionId && transports[sessionId]) {
+        transport = transports[sessionId];
+    } else if (!sessionId && isInitializeRequest(req.body)) {
+        // Handle new MCP connection initialization
+        transport = new StreamableHTTPServerTransport({
+            sessionIdGenerator: () => crypto.randomUUID(),
+            onsessioninitialized: (sessionId: string) => {
+                console.log(`New MCP session initialized: ${sessionId}, User ID: ${userId}`);
+                transports[sessionId] = transport!;
+            },
+        });
 
-    // Connect server to transport
-    await mcpServer.connect(transport);
-
-    // Handle connection close
-    req.on('close', () => {
-        console.log(`SSE connection closed: ${transport.sessionId}`);
-        activeConnections.delete(transport.sessionId);
-    });
+        const mcpServer = createMCPServer(userId);
+        await mcpServer.connect(transport);
+        // Handle connection close
+        transport.onclose = () => {
+            if (transport?.sessionId) {
+                console.log(`MCP session closed: ${transport.sessionId}`);
+                delete transports[transport.sessionId];
+            }
+        };
+    } else {
+        // invalid request
+        res.status(400).json({
+            error: {
+                code: -32000,
+                message: 'Invalid MCP session request. Please provide a valid session ID or initialize a new session.',
+            },
+        });
+        return;
+    }
+    // Handle the request
+    await transport.handleRequest(req, res, req.body);
 };
 
-app.post('/message', authMiddleware.getFlexibleAuthMiddleware(), async (req, res) => {
-    console.log('Received message');
-    const sessionId = req.query.sessionId as string;
-    const transport = activeConnections.get(sessionId);
-    if (transport) {
-        // Use the already parsed body instead of getRawBody
-        let messageBody = req.body;
+// Primary endpoint for MCP communication using Streamable HTTP transport
+app.all('/mcp', authMiddleware.getFlexibleAuthMiddleware(), authMiddleware.getUserMiddleware(), handleMCPConnection);
 
-        // If body is a string, parse it as JSON
-        if (typeof messageBody === 'string') {
-            try {
-                messageBody = JSON.parse(messageBody);
-            } catch (error) {
-                console.error('Failed to parse message body:', error);
-                res.status(400).json({ error: 'Invalid JSON in request body' });
-                return;
-            }
-        }
-
-        if (!messageBody.params) {
-            messageBody.params = {};
-        }
-
-        await transport.handlePostMessage(req, res, messageBody);
-    }
-});
-
-// Add flexible OAuth middleware to SSE endpoint (supports query params for EventSource)
-app.get('/sse', authMiddleware.getFlexibleAuthMiddleware(), authMiddleware.getUserMiddleware(), handleSSEConnection);
+// Legacy SSE endpoint for backwards compatibility
+app.get('/sse', authMiddleware.getFlexibleAuthMiddleware(), authMiddleware.getUserMiddleware(), handleMCPConnection);
 
 // Health check endpoint
 app.get('/health', (req, res) => {
     res.json({
         status: 'healthy',
-        activeConnections: activeConnections.size,
+        activeConnections: transports.size,
         timestamp: new Date().toISOString(),
     });
 });
@@ -141,16 +136,13 @@ app.get('/post', authMiddleware.getAuthMiddleware(), authMiddleware.getUserMiddl
 
 const server = app.listen(config.port, () => {
     console.log(`
-🚀 MCP SSE Server ready at: ${config.baseUrl}
-📡 SSE endpoint: ${config.baseUrl}/sse
+🚀 MCP Streamable HTTP Server ready at: ${config.baseUrl}
+📡 MCP endpoint: ${config.baseUrl}/mcp
+📡 Legacy SSE endpoint: ${config.baseUrl}/sse
 🔐 OAuth endpoints:
    • Authorization: ${config.baseUrl}/oauth/authorize
    • Token: ${config.baseUrl}/oauth/token
    • Metadata: ${config.baseUrl}/.well-known/oauth-authorization-server
-🏥 Health check: ${config.baseUrl}/health
-📊 Active connections: ${activeConnections.size}
-
-🔑 Demo credentials: Use any valid user ID and password "password123"
   `);
 });
 
@@ -159,9 +151,9 @@ process.on('SIGINT', () => {
     console.log('\nShutting down gracefully...');
 
     // Close all active connections
-    activeConnections.forEach((res, connectionId) => {
-        console.log(`Closing connection: ${connectionId}`);
-        res.close();
+    Object.entries(transports).forEach(([sessionId, transport]) => {
+        console.log(`Closing connection: ${sessionId}`);
+        transport.close();
     });
 
     server.close(() => {
