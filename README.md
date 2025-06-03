@@ -86,8 +86,16 @@ All the most popular MCP clients (Claude Desktop, Cursor, Github Copilot) use th
 }
 ```
 
-Since `mcp-remote` only register oauth client for the first time, if you ever see the `invalid client` error when connecting, you can fix it by removing the cached client state:
+## Troubleshooting
+
+### Clear your ~/.mcp-auth directory
+
+If you encounter an `invalid client` error when connecting to the MCP server, it may be due to that `mcp-remote` only register oauth client for the first time.you can fix it by removing the cached client state:
 
 ```bash
 rm -rf ~/.mcp-auth
 ```
+
+### Delete old versions of Node in NVM for Claude Desktop
+
+When using Claude Desktop, if you didn't see any OAuth window open in your browser, it may be due to the fact that Claude Desktop is using an old version of Node.js even if you have a newer version installed. You can fix it by deleting old versions of Node.js in NVM.
