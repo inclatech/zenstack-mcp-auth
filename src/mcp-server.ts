@@ -15,6 +15,13 @@ export function createMCPServer(userId: number) {
                 tools: {},
                 resources: {},
             },
+            instructions: `This server provides access to the Prisma client API for model ${modelNames.join(
+                ','
+            )}. You can use the tools to interact with the database using the Prisma client API.
+            ## Key Guidelines:
+            1. When a user says "my" or "I" in queries, automatically use their ID (${userId}) as the filter.
+            2. When creating new records, strictly adhere to the required input schema, do not request or add fields that aren't part of the schema.
+            `,
         }
     );
 
@@ -25,7 +32,7 @@ export function createMCPServer(userId: number) {
         .forEach(([name, functions]) => {
             const modelName = getModelName(name);
 
-            Object.entries(functions)
+            Object.entries(functions as Record<string, any>)
                 .filter(([functionName]) => functionNames.includes(functionName))
                 .forEach(([functionName, schema]) => {
                     const toolName = `${modelName}_${functionName}`;
