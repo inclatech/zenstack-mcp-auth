@@ -5,7 +5,7 @@
     "scripts": {
         "dev": "ts-node src/index.ts",
         "start": "node dist/index.js",
-        "build": "tsc & npm run generate",
+        "build": "npm run generate & tsc ",
         "generate": "zenstack generate",
         "db:push": "prisma db push",
         "db:seed": "prisma db seed",
@@ -15,7 +15,7 @@
         "@modelcontextprotocol/sdk": "^1.12.0",
         "@prisma/client": "6.8.2",
         "@types/bcrypt": "^5.0.2",
-        "@zenstackhq/runtime": "2.15.0",
+        "@zenstackhq/runtime": "2.15.1",
         "bcrypt": "^6.0.0",
         "express": "5.1.0",
         "zod": "^3.25.36"
@@ -26,7 +26,7 @@
         "prisma": "6.8.x",
         "ts-node": "10.9.2",
         "typescript": "5.8.2",
-        "zenstack": "2.15.0"
+        "zenstack": "2.15.1"
     },
     "prisma": {
         "seed": "ts-node prisma/seed.ts"
