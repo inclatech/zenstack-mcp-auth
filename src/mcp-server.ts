@@ -5,6 +5,9 @@ import { getPrisma } from '.';
 export function createMCPServer(userId: number) {
     const functionNames = ['findMany', 'createMany', 'deleteMany', 'updateMany'];
     const modelNames = ['Post', 'User'];
+    // The LLM client does not seem to follow it when putting in the 'instructions' of MCP server.
+    // So we have to repeat it in each tool description.
+    const currentUserPrompt = `The current user id '${userId}'`;
     const server = new McpServer(
         {
             name: 'mcp-server-zenstack',
@@ -19,7 +22,7 @@ export function createMCPServer(userId: number) {
                 ','
             )}. You can use the tools to interact with the database using the Prisma client API.
             ## Key Guidelines:
-            1. When a user says "my" or "I" in queries, automatically use their ID (${userId}) as the filter.
+            1. ${currentUserPrompt}.
             2. When creating new records, strictly adhere to the required input schema, do not request or add fields that aren't part of the schema.
             `,
         }
@@ -38,7 +41,7 @@ export function createMCPServer(userId: number) {
                     const toolName = `${modelName}_${functionName}`;
                     server.tool(
                         toolName,
-                        `Prisma client API '${functionName}' function input argument for model '${modelName}'`,
+                        `Prisma client API '${functionName}' function input argument for model '${modelName}'. ${currentUserPrompt}`,
                         {
                             args: schema,
                         },
