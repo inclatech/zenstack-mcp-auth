@@ -80,6 +80,7 @@ const handleMCPConnection = async (req: Request, res: Response) => {
 
         const mcpServer = createMCPServer(userId);
         await mcpServer.connect(transport);
+        console.log(`MCP server connected for User ID: ${userId}`);
         // Handle connection close
         transport.onclose = () => {
             if (transport?.sessionId) {

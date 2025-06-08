@@ -83,15 +83,8 @@ export class PasswordAuthProvider implements OAuthServerProvider {
     ): Promise<{ success: boolean; authCode?: string; error?: string }> {
         try {
             // Verify user exists in database and get their hashed password
-            // Explicitly select password field to bypass ZenStack @omit directive
             const user = await this.prisma.user.findUnique({
                 where: { email },
-                select: {
-                    id: true,
-                    email: true,
-                    name: true,
-                    password: true, // Explicitly select password field
-                },
             });
 
             if (!user) {

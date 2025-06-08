@@ -183,7 +183,6 @@ export class AuthMiddleware {
 
     /**
      * Flexible middleware that supports both Authorization headers and query parameters
-     * This is needed for SSE endpoints since EventSource doesn't support custom headers
      */
     public getFlexibleAuthMiddleware() {
         return async (req: Request & { auth?: AuthInfo }, res: Response, next: NextFunction) => {
