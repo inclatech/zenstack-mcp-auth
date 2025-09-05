@@ -77,10 +77,10 @@ All the most popular MCP clients (Claude Desktop, Cursor, Github Copilot) use th
 
 ```json
 {
-    "servers": {
+    "mcpServers": {
         "my-mcp-server": {
-            "command": "npx",
-            "args": ["-y", "mcp-remote", "http://localhost:3001/mcp"]
+            "command": "pnpx",
+            "args": ["mcp-remote", "http://localhost:3001/mcp"]
         }
     }
 }
