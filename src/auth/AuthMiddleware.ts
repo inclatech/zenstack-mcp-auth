@@ -54,32 +54,6 @@ export class AuthMiddleware {
 </html>`);
             }
         });
-
-        // Add OAuth metadata endpoints
-        this.authRouter.get('/.well-known/oauth-authorization-server', (req, res) => {
-            res.json({
-                issuer: config.baseUrl,
-                authorization_endpoint: `${config.baseUrl}/oauth/authorize`,
-                token_endpoint: `${config.baseUrl}/oauth/token`,
-                registration_endpoint: `${config.baseUrl}/oauth/register`,
-                revocation_endpoint: `${config.baseUrl}/oauth/revoke`,
-                scopes_supported: ['read', 'write'],
-                response_types_supported: ['code'],
-                grant_types_supported: ['authorization_code', 'refresh_token'],
-                token_endpoint_auth_methods_supported: ['client_secret_basic', 'client_secret_post'],
-                code_challenge_methods_supported: ['S256'],
-            });
-        });
-
-        // Add protected resource metadata
-        this.authRouter.get('/.well-known/oauth-protected-resource', (req, res) => {
-            res.json({
-                resource: config.baseUrl,
-                authorization_servers: [config.baseUrl],
-                scopes_supported: ['read', 'write'],
-                bearer_methods_supported: ['header'],
-            });
-        });
     }
 
     private async handleLogin(req: Request, res: Response) {
