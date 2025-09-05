@@ -32,20 +32,20 @@ You can opt-in available tools for `functionNames` variable in `mcp-server.ts`
 1. **Install dependencies**:
 
     ```bash
-    npm install
+    pnpm install
     ```
 
 2. **Set up the database**:
 
     ```bash
-    npx zenstack generate
-    npx prisma db push
+    pnpx zenstack generate
+    pnpx prisma db push
     ```
 
 3. **Seed the database** (optional):
 
     ```bash
-    npx prisma db seed
+    pnpx prisma db seed
     ```
 
     It create 3 users with posts. The passwords for all users are `password123`.
@@ -57,7 +57,7 @@ You can opt-in available tools for `functionNames` variable in `mcp-server.ts`
 4. **Start the server**:
 
     ```bash
-    npm run dev
+    pnpm run dev
     ```
 
 ## Testing the MCP Server
@@ -67,7 +67,7 @@ You can opt-in available tools for `functionNames` variable in `mcp-server.ts`
 The easiest way to test the MCP server is to run
 
 ```bash
-npx @modelcontextprotocol/inspector
+pnpx @modelcontextprotocol/inspector
 ```
 
 ### MCP Client
